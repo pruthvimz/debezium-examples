@@ -1,0 +1,19 @@
+<configuration>
+	<include
+		resource="/org/springframework/boot/logging/logback/base.xml" />
+	<appender name="STDOUT"
+		class="ch.qos.logback.core.ConsoleAppender">
+		<encoder>
+			<pattern>%d{dd-MM-yyyy HH:mm:ss.SSS} %green([%thread]) [%X{trace_id:-N/A} %X{span_id:-N/A}]
+				%highlight(%-5level) %logger{36}.%M - %msg%n</pattern>
+		</encoder>
+	</appender>
+	<root level="info">
+		<appender-ref ref="STDOUT" />
+	</root>
+	<springProfile name="dev">
+		<root level="info">
+			<appender-ref ref="STDOUT" />
+		</root>
+	</springProfile>
+</configuration>

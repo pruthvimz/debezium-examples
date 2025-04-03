@@ -1,0 +1,27 @@
+curl --location 'http://localhost:8083/connectors' \
+--header 'Content-Type: application/json' \
+--data '{
+	"name": "debezium-event-business-connector",
+	"config": {
+		"connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+		"tasks.max": "1",
+		"time.precision.mode": "connect",
+		"database.server.name": "postgres",
+		"database.hostname": "postgres",
+		"database.port": "5432",
+		"database.user": "postgres",
+		"database.password": "docker",
+		"database.dbname": "sample_db",
+		"table.include.list": "sample_schema.table_one, sample_schema.table_two",
+		"transforms": "Reroute,ActivateTracingSpan",
+		"transforms.Reroute.type": "io.debezium.transforms.ByLogicalTableRouter",
+		"transforms.Reroute.topic.regex": "(.*.)",
+		"transforms.Reroute.topic.replacement": "debezium_event_business_topic",
+		"transforms.ActivateTracingSpan.type": "io.debezium.transforms.tracing.ActivateTracingSpan",
+        "tracing.span.context.field": "tracingspancontext",
+		"tracing.operation.name": "debezium-read",
+		"tracing.with.context.field.only": "false",
+		"slot.name": "debezium100",
+		"topic.prefix": "dd"
+	}
+}'

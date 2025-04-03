@@ -1,0 +1,124 @@
+version: '2'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - 2181:2181
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    ports:
+      - 29092:29092
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  postgres:
+    image: quay.io/debezium/example-postgres:latest #3.0.8
+    ports:
+     - 5432:5432
+    environment:
+     - POSTGRES_USER=postgres
+     - POSTGRES_PASSWORD=docker
+    volumes:
+      - C:/Users/pruth/Documents/DockerData/postgresql/newdata:/var/lib/postgresql/data
+  connect:
+    image: quay.io/debezium/connect:latest #3.0.8
+    ports:
+     - 8083:8083
+    links:
+     - kafka
+     - postgres
+    environment:
+     - BOOTSTRAP_SERVERS=kafka:9092
+     - GROUP_ID=1
+     - CONFIG_STORAGE_TOPIC=my_connect_configs_30_0
+     - OFFSET_STORAGE_TOPIC=my_connect_offsets_30_0
+     - STATUS_STORAGE_TOPIC=my_connect_statuses_30_0
+     - ENABLE_OTEL=true
+     - JAVA_TOOL_OPTIONS=-javaagent:/essentials/observability/opentelemetry-javaagent.jar
+     - OTEL_SERVICE_NAME=debezium-connect
+     - OTEL_PROPAGATORS=tracecontext
+     - OTEL_TRACES_EXPORTER=otlp,logging
+     - OTEL_LOGS_EXPORTER=otlp
+     - OTEL_METRICS_EXPORTER=none           
+     - OTEL_LOG_LEVEL=debug
+     #- OTEL_MESSAGING_KAFKA_PROPAGATION=tracecontext # no effect
+     #- OTEL_INSTRUMENTATION_COMMON_DEFAULT_ENABLED=false # no effect
+     #- CONNECT_PLUGIN_PATH=/kafka/connect # Default path - not needed
+     #- PRODUCER_INTERCEPTOR_CLASSES=io.debezium.tracing.DebeziumTracingProducerInterceptor # no effect
+     - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+    depends_on:
+      - postgres
+    volumes:
+      - C:/Users/pruth/Documents/workspace-spring-tool-suite/debezium-examples/otel-e2e/essentials/opentelemetry-javaagent.jar:/essentials/observability/opentelemetry-javaagent.jar:ro #2.14.0
+      - C:/Users/pruth/Documents/workspace-spring-tool-suite/debezium-examples/otel-e2e/essentials/debezium-interceptor.jar:/kafka/connect/debezium-interceptor.jar #3.0.8
+  service-one:
+    build:
+      context: ../
+      dockerfile: deployment/serviceOne.Dockerfile
+    image: service-one:latest
+    ports:
+      - 8080:8080
+    environment:
+      - SPRING_PROFILE_ACTIVE=dev
+      - user.timezone=UTC
+      - JAVA_TOOL_OPTIONS=-javaagent:essentials/observability/opentelemetry-javaagent.jar
+      - OTEL_SERVICE_NAME=service-one
+      - OTEL_TRACES_EXPORTER=otlp,logging
+      - OTEL_LOGS_EXPORTER=none
+      - OTEL_METRICS_EXPORTER=none      
+      #- OTEL_INSTRUMENTATION_LOGGING_AUTO_INSTRUMENTATION_ENABLED=true
+      - OTEL_INSTRUMENTATION_COMMON_DEFAULT_ENABLED=false # disables all tracing, also tried enabling basic ones
+      #- OTEL_INSTRUMENTATION_KAFKA_ENABLED=false # not working, this only disable kafka instead of all 
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+    depends_on:
+      - postgres
+    volumes:
+      - ../essentials/opentelemetry-javaagent.jar:/essentials/observability/opentelemetry-javaagent.jar  
+  service-two:
+    build:
+      context: ../
+      dockerfile: deployment/serviceTwo.Dockerfile
+    image: service-two:latest
+    depends_on:
+      - postgres
+      - kafka
+    environment:
+      - SPRING_PROFILE_ACTIVE=dev
+      - user.timezone=UTC
+      - JAVA_TOOL_OPTIONS=-javaagent:essentials/observability/opentelemetry-javaagent.jar
+      - OTEL_SERVICE_NAME=service-two
+      - OTEL_TRACES_EXPORTER=otlp,logging
+      - OTEL_LOGS_EXPORTER=none
+      - OTEL_METRICS_EXPORTER=none      
+      #- OTEL_INSTRUMENTATION_LOGGING_AUTO_INSTRUMENTATION_ENABLED=true
+      - OTEL_INSTRUMENTATION_COMMON_DEFAULT_ENABLED=false # disables all tracing
+      #- OTEL_INSTRUMENTATION_KAFKA_ENABLED=false # no effect + I'm sending kafka event to service-three where I need the same trace, If I disable common or kafka I would have to write manual instrumentation for kafka producer.
+      - OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED=true
+      - OTEL_INSTRUMENTATION_JAVA_UTIL_LOGGING_ENABLED=true
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+    volumes:
+      - ../essentials/opentelemetry-javaagent.jar:/essentials/observability/opentelemetry-javaagent.jar  
+  otel-collector:
+    image: otel/opentelemetry-collector:latest
+    command: [ "--config=/etc/otel-collector-config.yaml" ]
+    volumes:
+      - ../essentials/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686" # Jaeger UI
+
