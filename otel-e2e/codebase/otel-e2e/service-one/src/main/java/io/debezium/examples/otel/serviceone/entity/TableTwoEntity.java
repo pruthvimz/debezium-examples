@@ -8,6 +8,8 @@ import lombok.experimental.Accessors;
 import org.hibernate.annotations.Where;
 
 import javax.persistence.*;
+import java.io.Serializable;
+import java.util.Date;
 
 @Entity
 @Table(name = "TABLE_TWO", uniqueConstraints = {
@@ -18,7 +20,7 @@ import javax.persistence.*;
 @AllArgsConstructor
 @NoArgsConstructor
 @Accessors(chain = true)
-public class TableTwoEntity {
+public class TableTwoEntity implements Serializable {
 
     private static final long serialVersionUID = 2745318439438792641L;
 
@@ -30,7 +32,19 @@ public class TableTwoEntity {
     @Column(name = "DATA", nullable = false)
     private String data;
 
+    @Column(name = "CREATED_DT", updatable = false)
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date createdOn;
+
+    @Column(name = "UPDATED_DT")
+    @Temporal(TemporalType.TIMESTAMP)
+    @Version
+    private Date updatedOn;
+
     @Column(name = "DELETED", nullable = false)
     private long deleted = 0;
+
+    @Column(name = "tracingspancontext")
+    private String tracingspancontext;
 
 }
